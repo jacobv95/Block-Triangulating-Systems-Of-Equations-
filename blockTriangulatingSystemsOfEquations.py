@@ -203,42 +203,49 @@ def blockTriangulateJacobian(n, JacobianEntries, showGraph):
 
     ## find the strongly connected components of the masked bipartite graph
     stronglyConnectedComponents = tarjanStronglyConnectedComponents(BipartiteGraph)
-
-
+    stronglyConnectedComponents.reverse()
+    
     ## format the strongly connected components in to blocks
     blocks, currentVariables, currentEquations = [], [], []
-    for stronglyConnectedComponent in reversed(stronglyConnectedComponents):
+    for stronglyConnectedComponent in stronglyConnectedComponents:
 
-        for elem in stronglyConnectedComponent:
-            if elem < n:
-                ## this is a variable
-                currentVariables.append(elem)
-            else:
-                ## this is an equation
-                currentEquations.append(elem - n)
-        
-        ## check if a block has been made
-        if (len(stronglyConnectedComponent) != 1) or ((len(currentEquations) == len(currentVariables)) and (len(currentEquations) != 0)):
-            ## either:
-            ## There are more than one element
-            ## therefore this must be a proper strongly connected components
-            ## this represents n equations with n unknwons
-            ## bank the current equations and variables and create new lists
-            ## or:
-            ## this is not a strongly connected component
-            ## but the length of the variables and the len of the equations are equal
-            ## therefore these n equaitons and variable can be solved together
-
-            ## sort the lists of equations and variables
-            currentEquations.sort()
-            currentVariables.sort()
+        if len(stronglyConnectedComponent) == 1:
+            if  stronglyConnectedComponent[0] < n:
+                raise ValueError(f'The variable {stronglyConnectedComponent[0]} was found without any equations pointing to it')
             
+            ## this is a single equation
+            ## find the edge, going from the equaiton to the variable
+            var = None
+            for edge in BipartiteGraph:
+                if edge[0] == stronglyConnectedComponent[0]:
+                    var = edge[1]
+                    break
+            
+            if var is None: raise ValueError(f'An edge was not found from the equation {stronglyConnectedComponent[0]-n}')
+
+            blocks.append([[stronglyConnectedComponent[0]-n], [var]])
+            
+            ## remove the variable from the strongly connected components
+            for scc in stronglyConnectedComponents:
+                if len(scc) == 1 and scc[0] == var:
+                    stronglyConnectedComponents.remove(scc)
+                    break
+
+        
+        else:
+            ## this is a proper strongly connected component
+            for elem in stronglyConnectedComponent:
+                if elem < n:
+                    currentVariables.append(elem)
+                else:
+                    currentEquations.append(elem - n)
             ## store the lists in the list of blocks
             blocks.append([currentEquations, currentVariables])
             
             ## reset the lists
             currentVariables = []
             currentEquations = []
+    
         
     if showGraph:
         import networkx as nx
@@ -249,9 +256,9 @@ def blockTriangulateJacobian(n, JacobianEntries, showGraph):
         for i in range(2*n):
             shape = 'circle' if i < n else 'square'
             if i < n:
-                name = f"x{i + 1}"
+                name = f"x{i + 0}"
             else:
-                name = f"f{i-n + 1}"
+                name = f"f{i-n + 0}"
             G.add_node(i, shape = shape, label = str(name))
 
 
@@ -263,8 +270,8 @@ def blockTriangulateJacobian(n, JacobianEntries, showGraph):
         nx.draw(G, with_labels = True)
         nt = Network(directed=True)
         nt.from_nx(G)
-        nt.toggle_physics(False)
-        nt.options.edges.smooth.enabled = False
+        # nt.toggle_physics(False)
+        # nt.options.edges.smooth.enabled = False
         nt.show('nx.html', notebook=False)
 
     return blocks
@@ -318,6 +325,14 @@ def Equations(x):
 x = [0] * n
 
 blocks = blockTriangulateJacobian(n,JacobianEntries(x), False)
+
+for i,block in enumerate(blocks):
+    print(f"block {i}", len(block[0]))
+    print("equations: ", block[0])
+    print("variables: ", block[1])
+    print()
+    
+
 
 
 for equationsIndex, variableIndex in blocks:   
